@@ -33,8 +33,10 @@ def get_args():
                         help='batch size')
     parser.add_argument('--num_workers', type=int, default=8,
                         help='number of workers')
-    parser.add_argument('--num_classes', type=int, default=5,
+    parser.add_argument('--num_classes', type=int, default=2,
                         help='type of the model to train')
+    parser.add_argument('--start_weights', type=str, default=None,
+                        help='pretrained weights')
 
     args = parser.parse_args()
     return args
@@ -106,13 +108,14 @@ def train(model, optimizer, criterion, device, train_loader, valid_loader,
 
 def main(args):
 
+    print(f'Name: {args.name}')
     print('Data preparing...')
     train_loader = get_dataloader(path=args.train_path,
                                   mode='train',
                                   binary=(args.num_classes == 2),
                                   batch_size=args.batch_size,
                                   num_workers=args.num_workers)
-    valid_loader = get_dataloader(path=args.train_path,
+    valid_loader = get_dataloader(path=args.valid_path,
                                   mode='valid',
                                   binary=(args.num_classes == 2),
                                   batch_size=args.batch_size,
@@ -124,7 +127,9 @@ def main(args):
         os.makedirs(checkpoints_path)
 
     device = torch.device('cuda')
-    backbone = IR_50([224, 224])
+    backbone = IR_50([112, 112])
+    if args.start_weights is not None:
+        backbone.load_state_dict(torch.load(args.start_weights, 'cpu'))
     head = ArcFace(512, args.num_classes)
     model = HeadedModel(backbone, head)
     optimizer = Adam(model.parameters(), lr=args.lr)

@@ -11,7 +11,7 @@ def transformation(mode):
     transforms = []
     if mode == 'train':
         transforms.extend([HorizontalFlip()])
-    transforms.extend([Resize(224, 224), Normalize()])
+    transforms.extend([Resize(112, 112), Normalize()])
     return Compose(transforms)
 
 
