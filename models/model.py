@@ -18,11 +18,11 @@ def get_model(model_type, num_classes, pretrained=True):
 
     global torchvision_models, pretrained_models
     if model_type in torchvision_models.keys():
-        model = torchvision_models['model_type'](pretrained=pretrained)
+        model = torchvision_models[model_type](pretrained=pretrained)
         in_features = model.fc.in_features
         model.fc = nn.Linear(in_features, num_classes)
     elif model_type in pretrained_models.keys():
-        model = pretrained_models['model_type']
+        model = pretrained_models[model_type]
         in_features = model.last_linear.in_features
         model.last_linear = nn.Linear(in_features, num_classes)
 
