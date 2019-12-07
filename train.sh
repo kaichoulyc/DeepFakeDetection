@@ -1,1 +1,1 @@
-CUDA_VISIBLE_DEVICES='0' python train.py --name all_classes --train_path /data/deepfake_detection/train --valid_path /data/deepfake_detection/valid --batch_size 110
+CUDA_VISIBLE_DEVICES='0' python train.py --name xception_focal_002 --train_path /data/deepfake_detection/train --valid_path /data/deepfake_detection/valid --model_type xception --loss_type cross --batch_size 45 --lr 0.002

@@ -5,9 +5,9 @@ import torch
 from torch.optim import Adam
 import pandas as pd
 from tqdm import tqdm
+from models.model import get_model
+import torch.nn as nn
 
-from head.metrics import ArcFace
-from models.irse import IR_50, HeadedModel
 from util.data_loader import get_dataloader
 from util.losses import FocalLoss
 from util.utils import accuracy
@@ -27,16 +27,22 @@ def get_args():
                         help='number of total epochs to run')
     parser.add_argument('--start_epoch', type=int, default=0,
                         help='starting epoch for resume')
-    parser.add_argument('--lr', type=float, default=0.1,
+    parser.add_argument('--lr', type=float, default=0.01,
                         help='learning rate')
-    parser.add_argument('--batch_size', type=int, default=120,
+    parser.add_argument('--batch_size', type=int, default=50,
                         help='batch size')
     parser.add_argument('--num_workers', type=int, default=8,
                         help='number of workers')
-    parser.add_argument('--num_classes', type=int, default=2,
+    parser.add_argument('--num_classes', type=int, default=5,
                         help='type of the model to train')
     parser.add_argument('--start_weights', type=str, default=None,
                         help='pretrained weights')
+    parser.add_argument('--model_type', type=str, default='metrics',
+                        choices=['metrics', 'resnet50', 'xception'],
+                        help='type of the model to learn')
+    parser.add_argument('--loss_type', type=str, default='cross',
+                        choices=['cross', 'focal'],
+                        help='type of the loss to use')
 
     args = parser.parse_args()
     return args
@@ -52,7 +58,7 @@ def validate(model, criterion, device, valid_loader):
         for images_batch, targets_batch in valid_loader:
             images_batch = images_batch.to(device)
             targets_batch = targets_batch.to(device)
-            predicts = model(images_batch, targets_batch)
+            predicts = model(images_batch)
             loss = criterion(predicts, targets_batch)
             epoch_loss += loss.item()
             epoch_acc += accuracy(predicts, targets_batch)[0].item()
@@ -78,7 +84,7 @@ def train(model, optimizer, criterion, device, train_loader, valid_loader,
         for images_batch, targets_batch in train_loader:
             images_batch = images_batch.to(device)
             targets_batch = targets_batch.to(device)
-            predicts = model(images_batch, targets_batch)
+            predicts = model(images_batch)
             loss = criterion(predicts, targets_batch)
             epoch_loss += loss.item()
             epoch_acc += accuracy(predicts, targets_batch)[0].item()
@@ -93,7 +99,7 @@ def train(model, optimizer, criterion, device, train_loader, valid_loader,
                                           criterion,
                                           device,
                                           valid_loader)
-        epoch_info = f'Epoch finished! Train loss: {epoch_loss},' \
+        epoch_info = f'Epoch finished! Train loss: {epoch_loss}, ' \
                      f'Train acc: {epoch_acc}, Val loss: {val_loss}, Val acc: {val_accuracy}'
         print(epoch_info)
 
@@ -126,14 +132,18 @@ def main(args):
     if not os.path.exists(checkpoints_path):
         os.makedirs(checkpoints_path)
 
+    losses = {
+        'cross': nn.CrossEntropyLoss,
+        'focal': FocalLoss
+    }
+
     device = torch.device('cuda')
-    backbone = IR_50([112, 112])
-    if args.start_weights is not None:
-        backbone.load_state_dict(torch.load(args.start_weights, 'cpu'))
-    head = ArcFace(512, args.num_classes)
-    model = HeadedModel(backbone, head)
-    optimizer = Adam(model.parameters(), lr=args.lr)
-    criterion = FocalLoss()
+
+    model = get_model(args.model_type, args.num_classes)
+
+    optimizer = Adam(model.parameters())
+
+    criterion = losses[args.loss_type]()
 
     if args.start_epoch:
         weights = torch.load(
@@ -147,7 +157,7 @@ def main(args):
                 if isinstance(v, torch.Tensor):
                     state[k] = v.to(device)
 
-    columns = ['Train loss', 'Valid loss', 'Train accuracy', 'Valid accuracy']
+    columns = ['Train loss', 'Train accuracy', 'Valid loss', 'Valid accuracy']
     information = (pd.DataFrame(columns=columns),
                    f'{args.name}_from_{args.start_epoch}')
 
