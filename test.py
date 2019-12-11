@@ -2,7 +2,6 @@ import argparse
 import os
 
 import torch
-from torch.optim import Adam
 import pandas as pd
 from tqdm import tqdm
 from models.model import get_model
@@ -11,6 +10,7 @@ import torch.nn as nn
 from util.data_loader import get_dataloader
 from util.losses import FocalLoss
 from util.utils import accuracy
+
 
 def get_args():
 
@@ -39,6 +39,7 @@ def get_args():
     args = parser.parse_args()
     return args
 
+
 def test(model, criterion, device, test_loader,
          args, information, checkpoints_path):
 
@@ -47,7 +48,7 @@ def test(model, criterion, device, test_loader,
     epoch_acc = 0
     steps = 0
     with torch.no_grad():
-        for images_batch, targets_batch in test_loader:
+        for images_batch, targets_batch in tqdm(test_loader):
             images_batch = images_batch.to(device)
             targets_batch = targets_batch.to(device)
             predicts = model(images_batch)
