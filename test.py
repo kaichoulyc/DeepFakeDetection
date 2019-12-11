@@ -41,9 +41,10 @@ def get_args():
 
 
 def test(model, criterion, device, test_loader,
-         args, information, checkpoints_path):
+         information, checkpoints_path):
 
     model.eval()
+    model.to(device)
     epoch_loss = 0
     epoch_acc = 0
     steps = 0
@@ -97,7 +98,7 @@ def main(args):
     information = (pd.DataFrame(columns=columns),
                    f'{args.name}_test_{args.epoch}')
     test(model, criterion, device, test_loader,
-         args, information, checkpoints_path)
+         information, checkpoints_path)
 
 
 if __name__ == '__main__':
