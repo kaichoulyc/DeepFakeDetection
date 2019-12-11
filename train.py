@@ -37,9 +37,10 @@ def get_args():
                         help='type of the model to train')
     parser.add_argument('--start_weights', type=str, default=None,
                         help='pretrained weights')
-    parser.add_argument('--model_type', type=str, default='metrics',
-                        choices=['metrics', 'resnet50', 'xception'],
+    parser.add_argument('--model_type', type=str, default='xception',
                         help='type of the model to learn')
+    parser.add_argument('--side_size', type=int, default=256,
+                        help='image side size')
     parser.add_argument('--loss_type', type=str, default='cross',
                         choices=['cross', 'focal'],
                         help='type of the loss to use')
@@ -107,8 +108,8 @@ def train(model, optimizer, criterion, device, train_loader, valid_loader,
         information[0].to_csv(f'info/{information[1]}.csv', index=False)
         torch.save({
             'model': model.state_dict(),
-            'otimizer': optimizer.state_dict()
-        }, os.path.join(checkpoints_path, f'epoch_{epoch}.pth'))
+            'optimizer': optimizer.state_dict()
+        }, os.path.join(checkpoints_path, f'epoch_{epoch + 1}.pth'))
         locer += 1
 
 
@@ -118,12 +119,12 @@ def main(args):
     print('Data preparing...')
     train_loader = get_dataloader(path=args.train_path,
                                   mode='train',
-                                  binary=(args.num_classes == 2),
+                                  side_size=args.side_size,
                                   batch_size=args.batch_size,
                                   num_workers=args.num_workers)
     valid_loader = get_dataloader(path=args.valid_path,
                                   mode='valid',
-                                  binary=(args.num_classes == 2),
+                                  side_size=args.side_size,
                                   batch_size=args.batch_size,
                                   num_workers=args.num_workers)
     print('Data prepared!')

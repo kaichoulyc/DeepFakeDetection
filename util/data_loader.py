@@ -6,18 +6,18 @@ from albumentations import Compose, HorizontalFlip, Normalize, Resize
 from torch.utils.data import DataLoader, Dataset
 
 
-def transformation(mode):
+def transformation(mode, side_size):
 
     transforms = []
     if mode == 'train':
         transforms.extend([HorizontalFlip()])
-    transforms.extend([Resize(256, 256), Normalize()])
+    transforms.extend([Resize(side_size, side_size), Normalize()])
     return Compose(transforms)
 
 
-def get_dataloader(path, mode, binary, batch_size, num_workers):
+def get_dataloader(path, mode, side_size, batch_size, num_workers):
 
-    some_dataset = FakeDataset(path, mode, binary)
+    some_dataset = FakeDataset(path, mode, side_size)
     some_dataloader = DataLoader(some_dataset, batch_size=batch_size,
                                  num_workers=num_workers)
 
@@ -26,12 +26,11 @@ def get_dataloader(path, mode, binary, batch_size, num_workers):
 
 class FakeDataset(Dataset):
 
-    def __init__(self, path, mode, binary):
+    def __init__(self, path, mode, side_size):
 
         self.path = path
         self.files = os.listdir(path)
-        self.trasfroms = transformation(mode)
-        self.binary = binary
+        self.trasfroms = transformation(mode, side_size)
 
     def __len__(self):
         return len(self.files)
@@ -45,7 +44,5 @@ class FakeDataset(Dataset):
         image = torch.tensor(image.transpose(2, 0, 1)).float()
 
         target = int(self.files[index].split('_')[0])
-        if self.binary:
-            target = 1 if target else 0
 
         return image, target
