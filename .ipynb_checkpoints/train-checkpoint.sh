@@ -1,1 +1,0 @@
-CUDA_VISIBLE_DEVICES='0' python train.py --name plain_resnet_all --train_path /data/deepfake_detection/train --valid_path /data/deepfake_detection/valid --model_type standart --batch_size 350 --lr 0.01 --num_classes 5
