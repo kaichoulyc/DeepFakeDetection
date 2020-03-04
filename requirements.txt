@@ -1,0 +1,7 @@
+albumentations==0.4.3
+jpeg4py==0.1.4
+pandas==1.0.1
+pretrainedmodels==0.7.4
+pytorch-lightning==0.6.0
+torch==1.4.0
+torchvision==0.5.0

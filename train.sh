@@ -1,1 +1,1 @@
-CUDA_VISIBLE_DEVICES='0' python train.py --name xception_cross --train_path /data/deepfake_detection/train --valid_path /data/deepfake_detection/valid --model_type xception --side_size 256 --loss_type cross --batch_size 50 --lr 0.0001
+python train.py config.yml

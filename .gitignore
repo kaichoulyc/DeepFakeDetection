@@ -15,3 +15,11 @@ test_info
 
 weights
 
+# archives
+
+*.zip
+
+# notebooks
+
+.ipynb_checkpoints
+*.ipynb

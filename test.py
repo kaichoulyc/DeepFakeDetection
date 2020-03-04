@@ -1,107 +1,98 @@
-import argparse
 import os
 
+import fire
+import yaml
 import torch
-import pandas as pd
-from tqdm import tqdm
-from models.model import get_model
-import torch.nn as nn
 
-from util.data_loader import get_dataloader
-from util.losses import FocalLoss
-from util.utils import accuracy
+from pytorch_lightning import Trainer
+from main_module import get_module
+from pytorch_lightning.logging import TestTubeLogger
 
 
-def get_args():
-
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument('--name', type=str, default=None,
-                        help='name of the experement')
-    parser.add_argument('--test_path', type=str, default=None,
-                        help='path to test data')
-    parser.add_argument('--epoch', type=int, default=0,
-                        help='epoch for test')
-    parser.add_argument('--batch_size', type=int, default=50,
-                        help='batch size')
-    parser.add_argument('--num_workers', type=int, default=8,
-                        help='number of workers')
-    parser.add_argument('--num_classes', type=int, default=5,
-                        help='type of the model to train')
-    parser.add_argument('--model_type', type=str, default='xception',
-                        help='type of the model to learn')
-    parser.add_argument('--side_size', type=int, default=256,
-                        help='image side size')
-    parser.add_argument('--loss_type', type=str, default='cross',
-                        choices=['cross', 'focal'],
-                        help='type of the loss to use')
-
-    args = parser.parse_args()
-    return args
+def make_dir_safe(dir_name):
+    if not os.path.exists(dir_name):
+        os.makedirs(dir_name)
 
 
-def test(model, criterion, device, test_loader,
-         information, checkpoints_path):
+def build_trainer(gpus: list,
+                  distributed_backend,
+                  cp_saver_params: dict,
+                  loggs_save_dir: str,
+                  experement_name: str):
+    cp_save_dir     = cp_saver_params['savedir']
+    cp_save_dir = os.path.join(cp_save_dir, experement_name)
+    make_dir_safe(cp_save_dir)
+    version_check = os.path.join(loggs_save_dir, experement_name)
+    make_dir_safe(version_check)
+    versions = os.listdir(version_check)
+    version = 0
+    if versions:
+        numbers = [int(i.split('_')[1]) for i in versions]
+        numbers.sort()
+        version = numbers[-1]
+        version += 1
+    cp_save_dir = os.path.join(cp_save_dir, f'version_{version}')
+    make_dir_safe(cp_save_dir)
 
-    model.eval()
-    model.to(device)
-    epoch_loss = 0
-    epoch_acc = 0
-    steps = 0
-    with torch.no_grad():
-        for images_batch, targets_batch in tqdm(test_loader):
-            images_batch = images_batch.to(device)
-            targets_batch = targets_batch.to(device)
-            predicts = model(images_batch)
-            loss = criterion(predicts, targets_batch)
-            epoch_loss += loss.item()
-            epoch_acc += accuracy(predicts, targets_batch)[0].item()
-            steps += 1
-        epoch_loss /= steps
-        epoch_acc /= steps
+    tt_logger = TestTubeLogger(save_dir=loggs_save_dir, name=experement_name)
+    trainer = Trainer(gpus=gpus,
+                      max_nb_epochs=0,
+                      distributed_backend=distributed_backend,
+                      logger=tt_logger,
+                      train_percent_check=0,
+                      val_percent_check=0)
 
-    print(f'Test finished! Test loss: {epoch_loss}, Test acc: {epoch_acc}')
-    information[0].loc[0] = [epoch_loss, epoch_acc]
-    information[0].to_csv(f'test_info/{information[1]}.csv', index=False)
+    return trainer
 
 
-def main(args):
+def main(config: str):
 
-    print(f'Name: {args.name}')
-    print('Data preparing...')
-    test_loader = get_dataloader(path=args.test_path,
-                                 mode='test',
-                                 side_size=args.side_size,
-                                 batch_size=args.batch_size,
-                                 num_workers=args.num_workers)
-    print('Data prepared!')
-    checkpoints_path = f'checkpoints/{args.name}'
+    with open(config) as f:
+        cfg = yaml.safe_load(f)
 
-    losses = {
-        'cross': nn.CrossEntropyLoss,
-        'focal': FocalLoss
-    }
+    experement_name     = cfg['experement_name']
+    model_info          = cfg['model_info']
+    loss                = cfg['loss']
+    gpus                = cfg['gpus']
+    base_weights_path   = cfg.get('base_weights')
+    cp_saver_params     = cfg['cp_saver_params']
+    loggs_save_dir      = cfg['base_logdir']
+    opt_name            = cfg['opt_name']
+    opt_params          = cfg['opt_params']
+    sched_name          = cfg.get('sched_name')
+    sched_params        = cfg.get('sched_params')
+    loader_data         = cfg['loader_data']
+    weights             = cfg['infer_chekpoint']
 
-    device = torch.device('cuda')
+    distributed_backend = None
+    if len(gpus) > 1:
+        distributed_backend = 'ddp'
 
-    model = get_model(args.model_type, args.num_classes)
+    make_dir_safe(loggs_save_dir)
 
-    criterion = losses[args.loss_type]()
-
-    weights = torch.load(
-        os.path.join(checkpoints_path, f'epoch_{args.epoch}.pth'),
-        map_location='cpu'
+    model = get_module(exp_name=experement_name,
+                       model_info=model_info,
+                       criterion=loss,
+                       opt_name=opt_name,
+                       opt_params=opt_params,
+                       loader_data=loader_data,
+                       sched_name=sched_name,
+                       sched_params=sched_params,
+                       gpus=gpus,
+                       base_weights=base_weights_path)
+    
+    model.load_state_dict(torch.load(weights, map_location='cpu')['state_dict'])
+    model.freeze()
+    trainer = build_trainer(
+        gpus=gpus,
+        distributed_backend=distributed_backend,
+        cp_saver_params=cp_saver_params,
+        loggs_save_dir=loggs_save_dir,
+        experement_name=experement_name,
     )
-    model.load_state_dict(weights['model'])
 
-    columns = ['Test loss', 'Test accuracy']
-    information = (pd.DataFrame(columns=columns),
-                   f'{args.name}_test_{args.epoch}')
-    test(model, criterion, device, test_loader,
-         information, checkpoints_path)
+    trainer.test(model)
 
 
 if __name__ == '__main__':
-
-    args = get_args()
-    main(args)
+    fire.Fire(main)

@@ -1,0 +1,34 @@
+experement_name: Base inception_v4
+
+# base_weights_path: ...
+
+model_info:
+  model_type: inceptionv4 # possible [resnet50, resnet101, resnet152, xception, inceptionv4, seresnext]
+  num_classes: 2
+  pretrained: True
+
+loss: Focal # possible [Focal, CrossEntropy]
+gpus: '0, 1'
+use_fp16: False
+train_percent_check: 1.0
+val_percent_check: 1.0
+early_stop_params:
+  patience: 20
+cp_saver_params:
+  savedir: ...
+  metric: val_loss
+  mode: min
+  prefix: val_loss
+base_logdir: ...
+# gradient_clip_val: 5
+epochs: 1000
+opt_name: Adam
+opt_params:
+  lr: 0.002
+# sched_name: ReduceLROnPlateau
+# sched_params:
+#   patience: 3
+#   factor: 0.1
+
+
+infer_chekpoint: ...

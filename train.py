@@ -1,172 +1,137 @@
-import argparse
 import os
 
-import torch
-from torch.optim import Adam
-import pandas as pd
-from tqdm import tqdm
-from models.model import get_model
-import torch.nn as nn
+import fire
+import yaml
+from pytorch_lightning import Trainer
+from pytorch_lightning.callbacks import EarlyStopping
+from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.logging import TestTubeLogger
 
-from util.data_loader import get_dataloader
-from util.losses import FocalLoss
-from util.utils import accuracy
+from main_module import get_module
 
 
-def get_args():
-
-    parser = argparse.ArgumentParser()
-
-    parser.add_argument('--name', type=str, default=None,
-                        help='name of the experement')
-    parser.add_argument('--train_path', type=str, default=10,
-                        help='path to training data')
-    parser.add_argument('--valid_path', type=str, default=None,
-                        help='path to validation data')
-    parser.add_argument('--epochs', type=int, default=1000,
-                        help='number of total epochs to run')
-    parser.add_argument('--start_epoch', type=int, default=0,
-                        help='starting epoch for resume')
-    parser.add_argument('--lr', type=float, default=0.01,
-                        help='learning rate')
-    parser.add_argument('--batch_size', type=int, default=50,
-                        help='batch size')
-    parser.add_argument('--num_workers', type=int, default=8,
-                        help='number of workers')
-    parser.add_argument('--num_classes', type=int, default=5,
-                        help='type of the model to train')
-    parser.add_argument('--start_weights', type=str, default=None,
-                        help='pretrained weights')
-    parser.add_argument('--model_type', type=str, default='xception',
-                        help='type of the model to learn')
-    parser.add_argument('--side_size', type=int, default=256,
-                        help='image side size')
-    parser.add_argument('--loss_type', type=str, default='cross',
-                        choices=['cross', 'focal'],
-                        help='type of the loss to use')
-
-    args = parser.parse_args()
-    return args
+def make_dir_safe(dir_name):
+    if not os.path.exists(dir_name):
+        os.makedirs(dir_name)
 
 
-def validate(model, criterion, device, valid_loader):
+def build_trainer(experement_name: str,
+                  gpus: list,
+                  epochs: int,
+                  use_fp16: bool,
+                  distributed_backend,
+                  train_percent_check: float,
+                  val_percent_check: float,
+                  early_stop_params: dict,
+                  cp_saver_params: dict,
+                  loggs_save_dir: str,
+                  gradient_clip_val: float,
+                  resume_checkpoint_path: str):
 
-    model.eval()
-    epoch_loss = 0
-    epoch_acc = 0
-    steps = 0
-    with torch.no_grad():
-        for images_batch, targets_batch in valid_loader:
-            images_batch = images_batch.to(device)
-            targets_batch = targets_batch.to(device)
-            predicts = model(images_batch)
-            loss = criterion(predicts, targets_batch)
-            epoch_loss += loss.item()
-            epoch_acc += accuracy(predicts, targets_batch)[0].item()
-            steps += 1
-        epoch_loss /= steps
-        epoch_acc /= steps
+    patience        = early_stop_params['patience']
+    cp_save_dir     = cp_saver_params['savedir']
+    cp_metric       = cp_saver_params['metric']
+    cp_mode         = cp_saver_params['mode']
+    cp_prefix       = cp_saver_params['prefix']
 
-    return epoch_loss, epoch_acc
+    cp_save_dir = os.path.join(cp_save_dir, experement_name)
+    make_dir_safe(cp_save_dir)
+    version_check = os.path.join(loggs_save_dir, experement_name)
+    make_dir_safe(version_check)
+    versions = os.listdir(version_check)
+    version = 0
+    if versions:
+        numbers = [int(i.split('_')[1]) for i in versions]
+        numbers.sort()
+        version = numbers[-1]
+        version += 1
+    print(f'Version: {version}')
+    cp_save_dir = os.path.join(cp_save_dir, f'version_{version}')
+    make_dir_safe(cp_save_dir)
 
+    early_stop_callback = EarlyStopping(patience=patience)
+    checkpoint_callback = ModelCheckpoint(
+        filepath=cp_save_dir,
+        monitor=cp_metric,
+        mode=cp_mode,
+        prefix=cp_prefix
+    )
+    tt_logger = TestTubeLogger(save_dir=loggs_save_dir, name=experement_name)
+    trainer = Trainer(gpus=gpus,
+                      max_nb_epochs=epochs,
+                      early_stop_callback=early_stop_callback,
+                      distributed_backend=distributed_backend,
+                      checkpoint_callback=checkpoint_callback,
+                      logger=tt_logger,
+                      train_percent_check=train_percent_check,
+                      val_percent_check=val_percent_check,
+                      use_amp=use_fp16,
+                      gradient_clip_val=gradient_clip_val,
+                      resume_from_checkpoint=resume_checkpoint_path)
 
-def train(model, optimizer, criterion, device, train_loader, valid_loader,
-          args, information, checkpoints_path):
-
-    model.to(device)
-    print('Train started...')
-    locer = 0
-    for epoch in tqdm(range(args.start_epoch, args.epochs)):
-        print(f'Epoch {epoch+1} started')
-        model.train()
-        epoch_loss = 0
-        epoch_acc = 0
-        steps = 0
-        for images_batch, targets_batch in train_loader:
-            images_batch = images_batch.to(device)
-            targets_batch = targets_batch.to(device)
-            predicts = model(images_batch)
-            loss = criterion(predicts, targets_batch)
-            epoch_loss += loss.item()
-            epoch_acc += accuracy(predicts, targets_batch)[0].item()
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-            steps += 1
-        epoch_loss /= steps
-        epoch_acc /= steps
-
-        val_loss, val_accuracy = validate(model,
-                                          criterion,
-                                          device,
-                                          valid_loader)
-        epoch_info = f'Epoch finished! Train loss: {epoch_loss}, ' \
-                     f'Train acc: {epoch_acc}, Val loss: {val_loss}, Val acc: {val_accuracy}'
-        print(epoch_info)
-
-        information[0].loc[locer] = [epoch_loss, epoch_acc, val_loss, val_accuracy]
-        information[0].to_csv(f'info/{information[1]}.csv', index=False)
-        torch.save({
-            'model': model.state_dict(),
-            'optimizer': optimizer.state_dict()
-        }, os.path.join(checkpoints_path, f'epoch_{epoch + 1}.pth'))
-        locer += 1
+    return trainer
 
 
-def main(args):
+def main(config: str = "config.yml", local_rank: int = 0):
 
-    print(f'Name: {args.name}')
-    print('Data preparing...')
-    train_loader = get_dataloader(path=args.train_path,
-                                  mode='train',
-                                  side_size=args.side_size,
-                                  batch_size=args.batch_size,
-                                  num_workers=args.num_workers)
-    valid_loader = get_dataloader(path=args.valid_path,
-                                  mode='valid',
-                                  side_size=args.side_size,
-                                  batch_size=args.batch_size,
-                                  num_workers=args.num_workers)
-    print('Data prepared!')
+    with open(config) as f:
+        cfg = yaml.safe_load(f)
 
-    checkpoints_path = f'checkpoints/{args.name}'
-    if not os.path.exists(checkpoints_path):
-        os.makedirs(checkpoints_path)
+    experement_name     = cfg['experement_name']
+    model_info          = cfg['model_info']
+    loss                = cfg['loss']
+    gpus                = cfg['gpus']
+    use_fp16            = cfg['use_fp16']
+    base_weights_path   = cfg.get('base_weights')
+    train_percent_check = cfg['train_percent_check']
+    val_percent_check   = cfg['val_percent_check']
+    early_stop_params   = cfg['early_stop_params']
+    cp_saver_params     = cfg['cp_saver_params']
+    loggs_save_dir      = cfg['base_logdir']
+    gradient_clip_val   = cfg.get('gradient_clip_val')
+    epochs              = cfg['epochs']
+    opt_name            = cfg['opt_name']
+    opt_params          = cfg['opt_params']
+    sched_name          = cfg.get('sched_name')
+    sched_params        = cfg.get('sched_params')
+    loader_data         = cfg['loader_data']
 
-    losses = {
-        'cross': nn.CrossEntropyLoss,
-        'focal': FocalLoss
-    }
+    if len(gpus) > 1:
+        distributed_backend = 'ddp'
 
-    device = torch.device('cuda')
+    make_dir_safe(loggs_save_dir)
+    resume = cfg.get('resume')
+    resume_checkpoint_path = None
+    if resume is not None:
+        resume_checkpoint_path = resume['checkpoint_path']
 
-    model = get_model(args.model_type, args.num_classes)
+    trainer = build_trainer(experement_name=experement_name,
+                            gpus=gpus,
+                            epochs=epochs,
+                            use_fp16=use_fp16,
+                            distributed_backend=distributed_backend,
+                            train_percent_check=train_percent_check,
+                            val_percent_check=val_percent_check,
+                            early_stop_params=early_stop_params,
+                            cp_saver_params=cp_saver_params,
+                            loggs_save_dir=loggs_save_dir,
+                            gradient_clip_val=gradient_clip_val,
+                            resume_checkpoint_path=resume_checkpoint_path)
 
-    optimizer = Adam(model.parameters())
+    model = get_module(exp_name=experement_name,
+                       model_info=model_info,
+                       criterion=loss,
+                       opt_name=opt_name,
+                       opt_params=opt_params,
+                       loader_data=loader_data,
+                       sched_name=sched_name,
+                       sched_params=sched_params,
+                       gpus=gpus,
+                       base_weights=base_weights_path)
 
-    criterion = losses[args.loss_type]()
-
-    if args.start_epoch:
-        weights = torch.load(
-            os.path.join(checkpoints_path, f'epoch_{args.start_epoch}.pth'),
-            map_location='cpu'
-        )
-        model.load_state_dict(weights['model'])
-        optimizer.load_state_dict(weights['optimizer'])
-        for state in optimizer.state.values():
-            for k, v in state.items():
-                if isinstance(v, torch.Tensor):
-                    state[k] = v.to(device)
-
-    columns = ['Train loss', 'Train accuracy', 'Valid loss', 'Valid accuracy']
-    information = (pd.DataFrame(columns=columns),
-                   f'{args.name}_from_{args.start_epoch}')
-
-    train(model, optimizer, criterion, device, train_loader, valid_loader,
-          args, information, checkpoints_path)
+    trainer.fit(model)
 
 
 if __name__ == '__main__':
-
-    args = get_args()
-    main(args)
+    fire.Fire(main)
+    
