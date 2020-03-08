@@ -51,18 +51,22 @@ class FacebookFakes(Dataset):
         self.df = pd.read_csv(df_path)
         self.transforms = transformation(mode, side_size)
 
-    def len(self):
+    def __len__(self):
         return len(self.df)
 
     def __getitem__(self, index):
 
         image_data = self.df.iloc[index]
-        image = jpeg.JPEG(os.path.join(self.path, image_data['image']))
+        image = jpeg.JPEG(os.path.join(self.path, image_data['image_name'])).decode()
         transed = self.transforms(image=image)
         image = transed['image']
         image = torch.tensor(image.transpose(2, 0, 1)).float()
 
-        target = image_data['target']
+        target = image_data['label']
+        if target == 'real':
+            target = 0
+        elif target == 'fake':
+            target = 1
 
         return image, target
 

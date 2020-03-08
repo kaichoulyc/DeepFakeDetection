@@ -96,6 +96,7 @@ def main(config: str = "config.yml", local_rank: int = 0):
     sched_params        = cfg.get('sched_params')
     loader_data         = cfg['loader_data']
 
+    distributed_backend = None
     if len(gpus) > 1:
         distributed_backend = 'ddp'
 

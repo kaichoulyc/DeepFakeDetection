@@ -18,6 +18,7 @@ class FakeClassificationModule(pl.LightningModule):
     }
 
     def __init__(self, hparams):
+        super(FakeClassificationModule, self).__init__()
 
         self.hparams = hparams
         model_info = self.hparams.model_info
@@ -105,31 +106,34 @@ class FakeClassificationModule(pl.LightningModule):
         return optimizer
 
     def train_dataloader(self):
-        return get_dataloader(path=self.loader_data['train_path'],
+        return get_dataloader(dataset=self.loader_data['dataset'],
+                              path=self.loader_data['train_path'],
                               mode='train',
                               side_size=self.loader_data['side_size'],
                               batch_size=self.loader_data['batch_size'],
                               num_workers=self.loader_data['num_workers'],
                               ddp=self.ddp,
-                              df_path=self.loader_data.get('df_path'))
+                              df_path=self.loader_data.get('df_train_path'))
 
     def val_dataloader(self):
-        return get_dataloader(path=self.loader_data['valid_path'],
+        return get_dataloader(dataset=self.loader_data['dataset'],
+                              path=self.loader_data['valid_path'],
                               mode='train',
                               side_size=self.loader_data['side_size'],
                               batch_size=self.loader_data['batch_size'],
                               num_workers=self.loader_data['num_workers'],
                               ddp=self.ddp,
-                              df_path=self.loader_data.get('df_path'))
+                              df_path=self.loader_data.get('df_valid_path'))
 
     def test_dataloader(self):
-        return get_dataloader(path=self.loader_data['test_path'],
+        return get_dataloader(dataset=self.loader_data['dataset'],
+                              path=self.loader_data['test_path'],
                               mode='test',
                               side_size=self.loader_data['side_size'],
                               batch_size=self.loader_data['batch_size'],
                               num_workers=self.loader_data['num_workers'],
                               ddp=self.ddp,
-                              df_path=self.loader_data.get('df_path'))
+                              df_path=self.loader_data.get('df_test_path'))
 
 
 def get_module(

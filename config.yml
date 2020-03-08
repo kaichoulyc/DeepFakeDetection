@@ -7,24 +7,38 @@ model_info:
   num_classes: 2
   pretrained: True
 
+loader_data:
+  dataset: Facebook
+  train_path: /fast_data/rew_data
+  valid_path: /fast_data/rew_data
+  test_path: /fast_data/rew_data
+  df_train_path: /fast_data/train_data.csv
+  df_valid_path: /fast_data/valid_data.csv
+  df_test_path: /fast_data/test_data.csv
+  side_size: 299
+  batch_size: 20
+  num_workers: 8
+
 loss: Focal # possible [Focal, CrossEntropy]
-gpus: '0, 1'
+gpus: '0'
 use_fp16: False
 train_percent_check: 1.0
 val_percent_check: 1.0
 early_stop_params:
   patience: 20
+
 cp_saver_params:
-  savedir: ...
+  savedir: /fast_data/checkpoints
   metric: val_loss
   mode: min
   prefix: val_loss
-base_logdir: ...
+base_logdir: /fast_data/checkpoints
+
 # gradient_clip_val: 5
 epochs: 1000
 opt_name: Adam
 opt_params:
-  lr: 0.002
+  lr: 0.01
 # sched_name: ReduceLROnPlateau
 # sched_params:
 #   patience: 3
