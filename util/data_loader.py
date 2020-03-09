@@ -48,25 +48,27 @@ class FacebookFakes(Dataset):
     def __init__(self, path, df_path, mode, side_size):
 
         self.path = path
-        self.df = pd.read_csv(df_path)
+        self.data = pd.read_csv(df_path).values
         self.transforms = transformation(mode, side_size)
 
     def __len__(self):
-        return len(self.df)
+        return len(self.data)
 
     def __getitem__(self, index):
 
-        image_data = self.df.iloc[index]
-        image = jpeg.JPEG(os.path.join(self.path, image_data['image_name'])).decode()
+        image_data = self.data[index]
+        image = jpeg.JPEG(os.path.join(self.path, image_data[0])).decode()
         transed = self.transforms(image=image)
         image = transed['image']
-        image = torch.tensor(image.transpose(2, 0, 1)).float()
+        image = torch.from_numpy(image.transpose(2, 0, 1)).float()
 
-        target = image_data['label']
+        target = image_data[1]
         if target == 'real':
             target = 0
         elif target == 'fake':
             target = 1
+            
+        target = torch.tensor(target, dtype=float)
 
         return image, target
 
@@ -87,8 +89,9 @@ class FaceForensics(Dataset):
         image = jpeg.JPEG(os.path.join(self.path, self.files[index])).decode()
         transed = self.trasforms(image=image)
         image = transed['image']
-        image = torch.tensor(image.transpose(2, 0, 1)).float()
+        image = torch.from_numpy(image.transpose(2, 0, 1)).float()
 
         target = int(self.files[index].split('_')[0])
+        target = torch.tensor(target, dtype=float)
 
         return image, target

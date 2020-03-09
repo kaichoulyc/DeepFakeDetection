@@ -37,6 +37,7 @@ class FakeClassificationModule(pl.LightningModule):
         return self.model(x)
 
     def training_step(self, batch, batch_idx):
+        print("YES")
         inp_img, target = batch
         preds = self.forward(inp_img)
         loss = self.criterrion(preds, target)
