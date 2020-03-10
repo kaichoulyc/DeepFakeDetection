@@ -30,14 +30,13 @@ class FakeClassificationModule(pl.LightningModule):
             self.model.load_state_dict(weights['model'], strict=False)
         self.optim_fn = torch.optim.__dict__[self.hparams.opt_name]
         self.loader_data = self.hparams.loader_data
-        self.criterrion = self.criterrions[self.hparams.criterion]
+        self.criterrion = self.criterrions[self.hparams.criterion]()
         self.ddp = True if len(self.hparams.gpus) > 1 else False
 
     def forward(self, x):
         return self.model(x)
 
     def training_step(self, batch, batch_idx):
-        print("YES")
         inp_img, target = batch
         preds = self.forward(inp_img)
         loss = self.criterrion(preds, target)
@@ -50,13 +49,13 @@ class FakeClassificationModule(pl.LightningModule):
         inp_img, target = batch
         preds = self.forward(inp_img)
         loss = self.criterrion(preds, target)
-        accu = accuracy(preds, target)
+        accu = accuracy(preds, target)[0]
         results = {'val_loss': loss,
                    'val_accuracy': accu}
 
         return results
 
-    def validation_end(self, outputs):
+    def validation_epoch_end(self, outputs):
 
         avg_loss = 0
         avg_accu = 0
@@ -83,7 +82,7 @@ class FakeClassificationModule(pl.LightningModule):
 
         return results
 
-    def test_end(self, outputs):
+    def test_epoch_end(self, outputs):
 
         avg_loss = 0
         avg_accu = 0

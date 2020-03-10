@@ -67,8 +67,6 @@ class FacebookFakes(Dataset):
             target = 0
         elif target == 'fake':
             target = 1
-            
-        target = torch.tensor(target, dtype=float)
 
         return image, target
 
