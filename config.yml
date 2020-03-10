@@ -17,10 +17,11 @@ loader_data:
   df_test_path: /fast_data/test_data.csv
   side_size: 299
   batch_size: 40
-  num_workers: 8
+  num_workers: 0
 
 loss: Focal # possible [Focal, CrossEntropy]
 gpus: '0, 1'
+benchmark: True
 use_fp16: False
 train_percent_check: 1.0
 val_percent_check: 1.0

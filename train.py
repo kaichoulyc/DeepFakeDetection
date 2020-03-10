@@ -26,7 +26,8 @@ def build_trainer(experement_name: str,
                   cp_saver_params: dict,
                   loggs_save_dir: str,
                   gradient_clip_val: float,
-                  resume_checkpoint_path: str):
+                  resume_checkpoint_path: str,
+                  benchmark: bool):
 
     patience        = early_stop_params['patience']
     cp_save_dir     = cp_saver_params['savedir']
@@ -67,7 +68,8 @@ def build_trainer(experement_name: str,
                       val_percent_check=val_percent_check,
                       use_amp=use_fp16,
                       gradient_clip_val=gradient_clip_val,
-                      resume_from_checkpoint=resume_checkpoint_path)
+                      resume_from_checkpoint=resume_checkpoint_path,
+                      benchmark=benchmark)
 
     return trainer
 
@@ -81,6 +83,7 @@ def main(config: str = "config.yml", local_rank: int = 0):
     model_info          = cfg['model_info']
     loss                = cfg['loss']
     gpus                = cfg['gpus']
+    benchmark           = cfg['benchmark']
     use_fp16            = cfg['use_fp16']
     base_weights_path   = cfg.get('base_weights')
     train_percent_check = cfg['train_percent_check']
@@ -117,7 +120,8 @@ def main(config: str = "config.yml", local_rank: int = 0):
                             cp_saver_params=cp_saver_params,
                             loggs_save_dir=loggs_save_dir,
                             gradient_clip_val=gradient_clip_val,
-                            resume_checkpoint_path=resume_checkpoint_path)
+                            resume_checkpoint_path=resume_checkpoint_path,
+                            benchmark=benchmark)
 
     model = get_module(exp_name=experement_name,
                        model_info=model_info,

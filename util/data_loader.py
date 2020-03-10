@@ -1,5 +1,6 @@
 import os
 
+import cv2
 import jpeg4py as jpeg
 import pandas as pd
 import torch
@@ -52,12 +53,14 @@ class FacebookFakes(Dataset):
         self.transforms = transformation(mode, side_size)
 
     def __len__(self):
-        return len(self.data)
+        return 100 #len(self.data)
 
     def __getitem__(self, index):
 
         image_data = self.data[index]
-        image = jpeg.JPEG(os.path.join(self.path, image_data[0])).decode()
+        # image = jpeg.JPEG(os.path.join(self.path, image_data[0])).decode()
+        image = cv2.imread(os.path.join(self.path, image_data[0]))
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         transed = self.transforms(image=image)
         image = transed['image']
         image = torch.from_numpy(image.transpose(2, 0, 1)).float()
